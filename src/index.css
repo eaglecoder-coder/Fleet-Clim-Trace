@@ -1,1 +1,194 @@
 @import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", "IBM Plex Sans", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+
+  --color-ink: #0a2a33;
+  --color-pine: #0e3945;
+  --color-deep: #12485696;
+  --color-paper: #edf2f1;
+  --color-card: #ffffff;
+  --color-line: #d8e3e1;
+  --color-linedark: #c3d4d1;
+  --color-body: #17323a;
+  --color-mute: #5b7479;
+  --color-faint: #8ba3a6;
+  --color-teal: #0e7c8a;
+  --color-tealdeep: #0a5c68;
+  --color-frost: #7fd8e4;
+  --color-icefrost: #dff3f6;
+  --color-amber: #e39112;
+  --color-danger: #d64545;
+  --color-leaf: #2e9e6b;
+  --color-orange: #e06a10;
+  --color-plum: #8e3230;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-paper);
+  color: var(--color-body);
+  background-image:
+    radial-gradient(1100px 500px at 85% -10%, rgba(14, 124, 138, 0.09), transparent 60%),
+    radial-gradient(800px 420px at -10% 30%, rgba(127, 216, 228, 0.10), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(10, 42, 51, 0.022) 0 1px, transparent 1px 44px),
+    repeating-linear-gradient(90deg, rgba(10, 42, 51, 0.022) 0 1px, transparent 1px 44px);
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(127, 216, 228, 0.45);
+}
+
+/* ---------- grain overlay ---------- */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 70;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+}
+
+/* ---------- keyframes ---------- */
+@keyframes tickerScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(20, 147, 166, 0.55); }
+  70% { box-shadow: 0 0 0 7px rgba(20, 147, 166, 0); }
+}
+@keyframes pulseAmber {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(227, 145, 18, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(227, 145, 18, 0); }
+}
+@keyframes pulseRed {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(214, 69, 69, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(214, 69, 69, 0); }
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(48px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes waveDrift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes dashFlow {
+  to { background-position-x: -28px; }
+}
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+@keyframes coldBreath {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
+
+.anim-fade-up { animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-drawer { animation: slideInRight 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-pop { animation: popIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.anim-ticker { animation: tickerScroll 26s linear infinite; }
+.anim-wave { animation: waveDrift 14s linear infinite; }
+.anim-breathe { animation: coldBreath 3.2s ease-in-out infinite; }
+.dot-pulse { animation: pulseDot 2s ease-out infinite; }
+.dot-pulse-amber { animation: pulseAmber 2s ease-out infinite; }
+.dot-pulse-red { animation: pulseRed 2s ease-out infinite; }
+
+/* scroll reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.65s cubic-bezier(0.22, 1, 0.36, 1), transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* animated dashed connector (chaîne de traçabilité) */
+.flow-line {
+  background-image: linear-gradient(90deg, currentColor 0 10px, transparent 10px 18px);
+  background-size: 18px 2px;
+  background-repeat: repeat-x;
+  background-position-y: center;
+  height: 2px;
+  animation: dashFlow 1.4s linear infinite;
+}
+
+/* perforated ticket edge */
+.ticket-notch {
+  --notch: var(--color-ink);
+  -webkit-mask:
+    radial-gradient(circle 9px at 0 50%, transparent 98%, #000) left,
+    radial-gradient(circle 9px at 100% 50%, transparent 98%, #000) right;
+  -webkit-mask-size: 51% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask:
+    radial-gradient(circle 9px at 0 50%, transparent 98%, #000) left,
+    radial-gradient(circle 9px at 100% 50%, transparent 98%, #000) right;
+  mask-size: 51% 100%;
+  mask-repeat: no-repeat;
+}
+
+/* thin scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #a8bfbc transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: #a8bfbc; border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* table row lift */
+.row-live { transition: background-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease; }
+.row-live:hover {
+  background-color: #f4fafa;
+  transform: translateX(3px);
+  box-shadow: inset 3px 0 0 var(--color-teal);
+}
+
+.btn-press { transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, color 0.15s ease, opacity 0.15s; }
+.btn-press:active { transform: translateY(1px) scale(0.985); }
+
+.card-hover { transition: transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s ease, border-color 0.22s ease; }
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -18px rgba(10, 42, 51, 0.35);
+  border-color: var(--color-linedark);
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--color-frost);
+  outline-offset: 1px;
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .anim-fade-up, .anim-drawer, .anim-pop, .anim-ticker, .anim-wave, .anim-breathe,
+  .dot-pulse, .dot-pulse-amber, .dot-pulse-red {
+    animation: none !important;
+  }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .flow-line { animation: none; }
+  .card-hover, .row-live, .btn-press { transition: none; }
+  * { transition-duration: 0.01ms !important; }
+}
