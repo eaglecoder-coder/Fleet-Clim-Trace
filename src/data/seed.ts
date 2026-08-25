@@ -1,4 +1,11 @@
-import type { AppState, Equipment, EquipStatus, InvResult, User, Site, Location, Transfer, Intervention, InventorySession, InventoryCheck, Anomaly, AuditEntry } from "../types";
+import type { AppState, Equipment, EquipStatus, InvResult, User, Site, Location, Transfer, Intervention, InventorySession, InventoryCheck, Anomaly, AuditEntry, ImportRecord } from "../types";
+
+/* Photos de démonstration — illustrations SVG auto-contenues (aucune dépendance réseau). */
+const svgUrl = (body: string) => "data:image/svg+xml;charset=utf-8," + encodeURIComponent(body);
+
+const PHOTO_SPLIT = svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><rect width="640" height="420" fill="#e7edef"/><rect y="340" width="640" height="80" fill="#d3dde0"/><rect x="140" y="96" width="360" height="118" rx="16" fill="#fbfdfd" stroke="#c2cfd4" stroke-width="3"/><rect x="160" y="116" width="240" height="10" rx="5" fill="#dbe4e8"/><rect x="160" y="134" width="240" height="10" rx="5" fill="#dbe4e8"/><rect x="156" y="164" width="328" height="28" rx="9" fill="#eef4f6" stroke="#c2cfd4" stroke-width="2"/><path d="M176 178h200" stroke="#b7c6cc" stroke-width="2" stroke-dasharray="6 5"/><circle cx="452" cy="126" r="7" fill="#0e7c8a"/><circle cx="452" cy="126" r="12" fill="none" stroke="#0e7c8a" stroke-opacity="0.35" stroke-width="3"/><path d="M220 252c-8 22-26 30-26 52M300 252c-6 18-20 26-20 46M380 252c-8 22-26 30-26 52" stroke="#9fd3dc" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`);
+
+const PHOTO_EXT = svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420"><rect width="640" height="420" fill="#dfe7e9"/><rect y="352" width="640" height="68" fill="#cdd8da"/><rect x="150" y="70" width="340" height="260" rx="14" fill="#f2f5f4" stroke="#bcc9cc" stroke-width="3"/><rect x="170" y="90" width="190" height="220" rx="10" fill="#e3eaea"/><g stroke="#b7c6ca" stroke-width="3"><path d="M182 110h166M182 128h166M182 146h166M182 164h166M182 182h166M182 200h166M182 218h166M182 236h166M182 254h166M182 272h166M182 290h166"/></g><circle cx="430" cy="200" r="52" fill="#e9eff0" stroke="#b7c6ca" stroke-width="3"/><circle cx="430" cy="200" r="36" fill="none" stroke="#c4d1d4" stroke-width="3"/><circle cx="430" cy="200" r="20" fill="none" stroke="#c4d1d4" stroke-width="3"/><circle cx="430" cy="200" r="6" fill="#0e7c8a"/><rect x="380" y="92" width="100" height="26" rx="6" fill="#0e7c8a" opacity="0.85"/></svg>`);
 
 /* Dates relatives au jour réel : les alertes (maintenance en retard,
    échéances sous 15 jours) restent toujours pertinentes. */
@@ -91,18 +98,18 @@ export function buildSeed(): AppState {
     eq(111, "SN-NSC-1187542", "Nasco",    "NS-12SP",    "1,5 CV", "perdu", "L10", "Fatou Diabaté",     { supplier: "Sodeci Froid", yearAcq: 2022, yearFab: 2021, lastInventory: iso(-20), lastInventoryResult: "absent", comment: "Introuvable lors de l'inventaire INV-2026-004." }),
     eq(112, "SN-SAM-5510771", "Samsung",  "AR35T",      "1,5 CV", "installe", "L13", "Jean Kouassi",   { lastMaintenance: iso(-85), nextMaintenance: iso(35) }),
     eq(113, "SN-HIS-2201902", "Hisense",  "AS-12TW4",   "1,5 CV", "installe", "L14", "Jean Kouassi",   { lastMaintenance: iso(-110), nextMaintenance: iso(12) }),
-    eq(114, "SN-LGD-7741560", "LG",       "DualCool V", "1,5 CV", "transfert", "L04", "Awa Koné",      { comment: "En transit vers Daloa — TRF-2026-00017." }),
+    eq(114, "SN-LGD-7741560", "LG",       "DualCool V", "1,5 CV", "transfert", "L04", "Awa Koné",      { comment: "En transit vers Daloa — TRF-2026-00017.", photos: [PHOTO_SPLIT] }),
     eq(115, "SN-PAN-3329114", "Panasonic", "CS-PU12",   "1,5 CV", "installe", "L15", "Jean Kouassi",   { lastMaintenance: iso(-30), nextMaintenance: iso(60) }),
     eq(116, "SN-MDE-3098455", "Midea",    "Blanc MBV",  "1,5 CV", "installe", "L16", "Souleymane Cissé", { lastMaintenance: iso(-55), nextMaintenance: iso(28) }),
     eq(117, "SN-TCL-6620871", "TCL",      "TAC-12CH",   "1,5 CV", "installe", "L17", "Souleymane Cissé", { lastMaintenance: iso(-5), nextMaintenance: iso(175), comment: "Pose neuve — installation initiale." }),
     eq(118, "SN-LGD-7741902", "LG",       "DualCool V", "1 CV",   "installe", "L19", "Hervé Aka",      { capacity: "9 000 BTU", power: "1 CV", lastMaintenance: iso(-48), nextMaintenance: iso(42) }),
     eq(119, "SN-HSR-4470291", "Haier",    "HSU-12LEK",  "1,5 CV", "a_verifier", "L05", "Awa Koné",     { comment: "Étiquette relevée au magasin annexe de Bouaké — localisation officielle non modifiée.", lastInventory: iso(-21), lastInventoryResult: "deplace" }),
     eq(120, "SN-HIS-2201344", "Hisense",  "AS-12TW4",   "1,5 CV", "installe", "L20", "Hervé Aka",      { lastMaintenance: iso(-75), nextMaintenance: iso(18) }),
-    eq(121, "SN-HSR-4470512", "Haier",    "HSU-12LEK",  "1,5 CV", "stock", "L11", "Fatou Diabaté",     { comment: "Unité de réserve — emballage d'origine." }),
-    eq(122, "SN-GRN-9042670", "Gree",     "Pular GWH",  "2 CV",   "stock", "L11", "Fatou Diabaté",     { capacity: "18 000 BTU", comment: "Réserve régionale centre." }),
+    eq(121, "SN-HSR-4470512", "Haier",    "HSU-12LEK",  "1,5 CV", "stock", "L11", "Fatou Diabaté",     { comment: "Unité de réserve — emballage d'origine.", photos: [PHOTO_EXT] }),
+    eq(122, "SN-GRN-9042670", "Gree",     "Pular GWH",  "2 CV",   "stock", "L11", "Fatou Diabaté",     { capacity: "18 000 BTU", comment: "Réserve régionale centre.", photos: [PHOTO_EXT] }),
     eq(123, "SN-MDE-3098711", "Midea",    "Blanc MBV",  "1,5 CV", "stock", "L02", "Awa Koné",          { comment: "Secours froid salle serveurs." }),
     eq(124, "SN-NSC-1187980", "Nasco",    "NS-12SP",    "1,5 CV", "maintenance", "L18", "Souleymane Cissé", { supplier: "Sodeci Froid", lastMaintenance: iso(-9), nextMaintenance: iso(3), comment: "Carte électronique HS — en réparation atelier." }),
-    eq(125, "SN-HIS-4589237", "Hisense",  "AS-12TW4",   "1,5 CV", "installe", "L12", "Jean Kouassi",   { lastMaintenance: iso(-75), nextMaintenance: iso(15), lastInventory: iso(-80), lastInventoryResult: "present", comment: "Équipement de référence du cahier des charges." }),
+    eq(125, "SN-HIS-4589237", "Hisense",  "AS-12TW4",   "1,5 CV", "installe", "L12", "Jean Kouassi",   { lastMaintenance: iso(-75), nextMaintenance: iso(15), lastInventory: iso(-80), lastInventoryResult: "present", comment: "Équipement de référence du cahier des charges.", photos: [PHOTO_SPLIT, PHOTO_EXT] }),
     eq(126, "SN-SAM-5510220", "Samsung",  "AR35T",      "1,5 CV", "reforme", "L11", "Fatou Diabaté",   { yearFab: 2018, yearAcq: 2019, warrantyEnd: iso(-400), comment: "Réformé — compresseur grippé, en attente d'évacuation." }),
   ];
 
@@ -125,6 +132,7 @@ export function buildSeed(): AppState {
       requester: "Marc Traoré", approver: "Awa Koné", transporter: "Transport Ets Koffi",
       status: "transit", reason: "Équipement du bureau 02 de Daloa hors service — remplacement temporaire.",
       requestedAt: iso(-6), approvedAt: iso(-5), shippedAt: iso(-3),
+      photoDemande: PHOTO_SPLIT,
     },
     {
       id: "t4", code: "TRF-2026-00018", equipmentId: "e125", fromLocationId: "L12", toLocationId: "L08",
@@ -219,11 +227,18 @@ export function buildSeed(): AppState {
     aud(iso(-300, 8), "Awa Koné", "admin", "CREATION", "Équipement", "CLM-000101", "Import initial du parc — 26 fiches créées."),
   ];
 
+  const imports: ImportRecord[] = [
+    {
+      id: "im1", code: "IMP-2026-001", source: "csv", fileName: "livraison_haier_gree_mars2026.csv",
+      operator: "Marc Traoré", date: iso(-24), count: 2, codes: ["CLM-000121", "CLM-000122"],
+    },
+  ];
+
   return {
-    version: 3,
+    version: 4,
     currentUserId: null,
-    users, sites, locations, equipment, transfers, interventions, sessions, checks, anomalies, audit,
-    seq: { eq: 126, trf: 18, int: 33, anm: 5, inv: 4, aud: an, chk: 17 },
+    users, sites, locations, equipment, transfers, interventions, sessions, checks, anomalies, imports, audit,
+    seq: { eq: 126, trf: 18, int: 33, anm: 5, inv: 4, aud: an, chk: 17, imp: 1 },
     toast: null,
   };
 }

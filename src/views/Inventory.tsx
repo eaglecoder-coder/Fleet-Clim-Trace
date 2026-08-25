@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { useStore, fmtDate, fmtDateTime, locLabel, locFull, siteLabel } from "../store";
 import { ANOMALY_META, INV_META, perms, type InvResult, type Anomaly } from "../types";
 import { Icon } from "../components/icons";
-import { Overline, Reveal, InvBadge, Modal, EmptyState, btnPrimary, btnGhost, inputCls, labelCls } from "../components/ui";
+import { Overline, Reveal, InvBadge, Modal, EmptyState, btnPrimary, btnGhost, btnDark, inputCls, labelCls } from "../components/ui";
+import ScanModal from "../components/ScanModal";
+import { reconciliationPdf } from "../lib/pdf";
 
 /* ==================== INVENTAIRE ==================== */
 
@@ -15,6 +17,7 @@ export function InventoryView() {
   const [checkModal, setCheckModal] = useState<{ eqId: string; result: "deplace" | "absent" } | null>(null);
   const [obsLoc, setObsLoc] = useState("");
   const [comment, setComment] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
 
   const session = s.sessions.find((x) => x.id === (selId ?? openSession?.id)) ?? openSession;
   const expected = useMemo(
@@ -22,6 +25,38 @@ export function InventoryView() {
     [session, s]
   );
   const checksOf = (sid: string) => s.checks.filter((c) => c.sessionId === sid);
+
+  const onScan = (code: string) => {
+    setScanOpen(false);
+    const e = s.equipment.find((x) => x.code === code);
+    if (!e) { dispatch({ type: "TOAST", msg: `${code} — introuvable dans le registre.` }); return; }
+    if (session && !session.closedAt && expected.some((x) => x.id === e.id)) {
+      const ck = checksOf(session.id).find((c) => c.equipmentId === e.id);
+      if (ck) dispatch({ type: "TOAST", msg: `${e.code} déjà contrôlé « ${INV_META[ck.result].label} » dans ${session.code}.` });
+      else dispatch({ type: "RECORD_CHECK", sessionId: session.id, equipmentId: e.id, result: "present", comment: "Constaté par scan QR sur le terrain." });
+    } else {
+      dispatch({ type: "TOAST", msg: `${e.code} scanné — hors périmètre de la session (${locLabel(s, e.locationId)}).` });
+    }
+  };
+
+  const exportReconciliation = () => {
+    if (!session) return;
+    const cks = checksOf(session.id);
+    const counts: Record<string, number> = {};
+    cks.forEach((c) => (counts[c.result] = (counts[c.result] ?? 0) + 1));
+    const gaps = cks.filter((c) => c.result !== "present").map((c) => {
+      const e = s.equipment.find((x) => x.id === c.equipmentId)!;
+      return { code: e.code, serial: e.serial, loc: locLabel(s, c.expectedLocationId), result: INV_META[c.result].label };
+    });
+    const checkedIds = new Set(cks.map((c) => c.equipmentId));
+    const notChecked = expected.filter((e) => !checkedIds.has(e.id)).map((e) => ({ code: e.code, serial: e.serial, loc: locLabel(s, e.locationId), result: "Non contrôlé" }));
+    reconciliationPdf({
+      sessionCode: session.code, site: siteLabel(s, session.siteId), checkedBy: session.checkedBy,
+      startedAt: fmtDateTime(session.startedAt), closedAt: session.closedAt ? fmtDateTime(session.closedAt) : undefined,
+      expected: expected.length, counts, notChecked, gaps,
+    });
+    dispatch({ type: "TOAST", msg: `Rapport de réconciliation ${session.code} généré (PDF).` });
+  };
 
   const submitCheck = (eqId: string, result: InvResult) => {
     if (!session) return;
@@ -106,11 +141,21 @@ export function InventoryView() {
                     {session.closedAt && ` · clôturée le ${fmtDateTime(session.closedAt)}`}
                   </div>
                 </div>
-                {!session.closedAt && p.inventory && (
-                  <button onClick={() => dispatch({ type: "CLOSE_SESSION", id: session.id })} className={btnGhost}>
-                    <Icon name="lock" className="h-4 w-4" /> Clôturer la session
+                <div className="flex flex-wrap gap-2">
+                  {!session.closedAt && p.inventory && (
+                    <button onClick={() => setScanOpen(true)} className={btnDark} title="Scanner l'étiquette QR d'une unité pour la marquer présente">
+                      <Icon name="scan" className="h-4 w-4" /> Scanner QR
+                    </button>
+                  )}
+                  <button onClick={exportReconciliation} className={btnGhost} title="Rapport final : couverture, écarts, non-contrôlés + visas">
+                    <Icon name="report" className="h-4 w-4" /> Réconciliation PDF
                   </button>
-                )}
+                  {!session.closedAt && p.inventory && (
+                    <button onClick={() => dispatch({ type: "CLOSE_SESSION", id: session.id })} className={btnGhost}>
+                      <Icon name="lock" className="h-4 w-4" /> Clôturer la session
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="divide-y divide-line/70">
@@ -210,6 +255,14 @@ export function InventoryView() {
           </button>
         </div>
       </Modal>
+
+      <ScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onDetected={onScan}
+        over={session ? `Session ${session.code}` : "Contrôle terrain"}
+        title="Scanner l'étiquette d'une unité"
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useStore, fmtDate, fmtDateTime, locLabel, locFull, siteLabel, isTransfe
 import { perms, type Transfer } from "../types";
 import { Icon } from "../components/icons";
 import { Overline, Reveal, TransferBadge, Modal, Stepper, EmptyState, btnPrimary, btnGhost, btnDanger, inputCls, labelCls, type Step } from "../components/ui";
+import { compressImage } from "../lib/photos";
 
 const FILTERS: { id: string; label: string }[] = [
   { id: "all", label: "Tous" },
@@ -36,6 +37,7 @@ export default function Transfers({ param, clearParam }: { param?: string; clear
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [preselect, setPreselect] = useState<string | undefined>(undefined);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   useEffect(() => {
     if (!param) return;
@@ -149,6 +151,29 @@ export default function Transfers({ param, clearParam }: { param?: string; clear
                             <div className="rounded-lg bg-paper px-3 py-2"><b className="text-body">Départ</b> — {siteLabel(s, s.locations.find((l) => l.id === t.fromLocationId)?.siteId ?? "")} · {locFull(s, t.fromLocationId)}</div>
                             <div className="rounded-lg bg-paper px-3 py-2"><b className="text-body">Destination</b> — {siteLabel(s, s.locations.find((l) => l.id === t.toLocationId)?.siteId ?? "")} · {locFull(s, t.toLocationId)}</div>
                           </div>
+                          {(t.photoDemande || t.photoReception) && (
+                            <div className="mt-3 border-t border-dashed border-linedark pt-3">
+                              <Overline className="text-teal">Preuves photo — état physique</Overline>
+                              <div className="mt-2 grid grid-cols-2 gap-3">
+                                {([["État au départ", t.photoDemande, t.requestedAt], ["État à la réception", t.photoReception, t.receivedAt]] as const).map(([cap, ph, at]) =>
+                                  ph ? (
+                                    <button key={cap} onClick={() => setLightbox(ph)} className="btn-press group overflow-hidden rounded-lg border border-line bg-paper text-left">
+                                      <img src={ph} alt={cap} className="aspect-[16/10] w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                      <span className="flex items-center justify-between px-2.5 py-1.5">
+                                        <span className="text-[11px] font-semibold text-body">{cap}</span>
+                                        <span className="font-mono text-[9.5px] text-faint">{fmtDate(at)}</span>
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <div key={cap} className="flex aspect-[16/12] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-linedark bg-paper/50 text-center">
+                                      <Icon name="ac" className="h-5 w-5 text-faint" />
+                                      <span className="px-2 text-[10.5px] text-faint">{cap}<br />non photographié</span>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <WorkflowPanel t={t} p={p} meName={me?.name ?? ""} dispatch={dispatch} />
                       </div>
@@ -162,7 +187,33 @@ export default function Transfers({ param, clearParam }: { param?: string; clear
       )}
 
       <NewTransferModal open={showNew} onClose={() => setShowNew(false)} preselect={preselect} />
+
+      <Modal open={lightbox !== null} onClose={() => setLightbox(null)} over="Preuve photo" title="État physique de l'équipement" wide>
+        {lightbox && <img src={lightbox} alt="Preuve photo du transfert" className="w-full rounded-lg border border-line" />}
+      </Modal>
     </div>
+  );
+}
+
+function PhotoAttach({ label, value, onChange }: { label: string; value?: string; onChange: (v?: string) => void }) {
+  return (
+    <label className={`btn-press flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 ${value ? "border-[#bfe3cd] bg-[#e2f3ea]/60" : "border-dashed border-linedark bg-paper/60 hover:border-teal"}`}>
+      {value ? (
+        <img src={value} alt="" className="h-9 w-14 rounded object-cover ring-1 ring-line" />
+      ) : (
+        <Icon name="ac" className="h-4.5 w-4.5 shrink-0 text-faint" />
+      )}
+      <span className="text-[12px] font-medium text-body">{label}</span>
+      <input
+        type="file" accept="image/*" className="hidden"
+        onChange={async (ev) => {
+          const f = ev.target.files?.[0];
+          if (!f) return;
+          try { onChange(await compressImage(f, 800, 0.68)); } catch { onChange(undefined); }
+          ev.target.value = "";
+        }}
+      />
+    </label>
   );
 }
 
@@ -171,6 +222,7 @@ function WorkflowPanel({ t, p, meName, dispatch }: { t: Transfer; p: ReturnType<
   const [transporter, setTransporter] = useState("Transport Ets Koffi");
   const [receiver, setReceiver] = useState(meName);
   const [rejecting, setRejecting] = useState(false);
+  const [photoRec, setPhotoRec] = useState<string | undefined>(undefined);
 
   return (
     <div className="rounded-xl border border-line bg-card p-4">
@@ -214,7 +266,12 @@ function WorkflowPanel({ t, p, meName, dispatch }: { t: Transfer; p: ReturnType<
         <div className="mt-3 space-y-2.5">
           <label className={labelCls}>Reçu par</label>
           <input value={receiver} onChange={(e) => setReceiver(e.target.value)} className={inputCls} />
-          <button disabled={!p.receive || receiver.trim().length === 0} onClick={() => dispatch({ type: "RECEIVE_TRANSFER", id: t.id, receiver: receiver.trim() })} className={`${btnPrimary} w-full justify-center`}>
+          <PhotoAttach
+            label={photoRec ? "Photo de réception jointe ✓ (cliquer pour changer)" : "Photo à la réception (recommandée)"}
+            value={photoRec}
+            onChange={setPhotoRec}
+          />
+          <button disabled={!p.receive || receiver.trim().length === 0} onClick={() => dispatch({ type: "RECEIVE_TRANSFER", id: t.id, receiver: receiver.trim(), photoReception: photoRec })} className={`${btnPrimary} w-full justify-center`}>
             <Icon name="box" className="h-4 w-4" /> Confirmer la réception
           </button>
           <p className="rounded-lg bg-icefrost/70 px-3 py-2 text-[11.5px] leading-relaxed text-tealdeep">
@@ -251,11 +308,12 @@ function NewTransferModal({ open, onClose, preselect }: { open: boolean; onClose
   const [toLoc, setToLoc] = useState("");
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
+  const [photoDem, setPhotoDem] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (open) {
       setEquipmentId(preselect ?? "");
-      setToLoc(""); setReason(""); setErr("");
+      setToLoc(""); setReason(""); setErr(""); setPhotoDem(undefined);
     }
   }, [open, preselect]);
 
@@ -267,7 +325,7 @@ function NewTransferModal({ open, onClose, preselect }: { open: boolean; onClose
       return;
     }
     if (toLoc === selEq.locationId) { setErr("La destination est identique à l'emplacement officiel actuel."); return; }
-    dispatch({ type: "CREATE_TRANSFER", equipmentId: selEq.id, toLocationId: toLoc, reason: reason.trim() });
+    dispatch({ type: "CREATE_TRANSFER", equipmentId: selEq.id, toLocationId: toLoc, reason: reason.trim(), photoDemande: photoDem });
     onClose();
   };
 
@@ -313,6 +371,16 @@ function NewTransferModal({ open, onClose, preselect }: { open: boolean; onClose
         <div>
           <label className={labelCls}>Motif du déplacement *</label>
           <textarea value={reason} onChange={(e) => { setReason(e.target.value); setErr(""); }} rows={2} className={`${inputCls} resize-none`} placeholder="Ex. : réaffectation du personnel, renfort saison chaude…" />
+        </div>
+
+        <div>
+          <label className={labelCls}>Preuve photo au départ</label>
+          <PhotoAttach
+            label={photoDem ? "Photo jointe à la demande ✓ (cliquer pour changer)" : "Photographier l'état de l'unité avant départ (optionnel)"}
+            value={photoDem}
+            onChange={setPhotoDem}
+          />
+          <p className="mt-1 text-[11px] text-faint">La photo est horodatée et reste attachée au transfert — elle servira de comparaison à la réception.</p>
         </div>
 
         {err && <p className="rounded-lg bg-[#fadfda] px-3 py-2 text-[12.5px] font-medium text-[#9e3327]">{err}</p>}

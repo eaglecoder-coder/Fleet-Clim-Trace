@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useStore, fmtDateTime, fmtDate, locLabel, siteLabel } from "../store";
-import { STATUS_META } from "../types";
+import { STATUS_META, ANOMALY_META } from "../types";
+import { anomalyReportPdf } from "../lib/pdf";
 import { Icon } from "../components/icons";
-import { Overline, Reveal, RoleBadge, EmptyState, btnGhost } from "../components/ui";
+import { Overline, Reveal, RoleBadge, EmptyState, btnGhost, btnPrimary } from "../components/ui";
 
 /* ==================== JOURNAL D'AUDIT ==================== */
 
@@ -110,6 +111,27 @@ export function ReportsView({ onToast }: { onToast: (m: string) => void }) {
   const { state: s } = useStore();
   const [siteId, setSiteId] = useState(s.sites[0]?.id ?? "");
 
+  const exportAnomaliesPdf = () => {
+    const rows = s.anomalies.map((a) => {
+      const e = s.equipment.find((x) => x.id === a.equipmentId);
+      return {
+        code: a.code,
+        type: ANOMALY_META[a.type].label,
+        status: a.status,
+        eqCode: e?.code ?? "—",
+        serial: e?.serial ?? "—",
+        expected: locLabel(s, a.expectedLocationId),
+        observed: a.observedLocationId ? locLabel(s, a.observedLocationId) : undefined,
+        detail: a.detail,
+        resolution: a.resolution ? `${a.resolution} — ${a.resolvedBy ?? ""}` : undefined,
+        declaredBy: a.declaredBy,
+        declaredAt: fmtDate(a.declaredAt),
+      };
+    });
+    anomalyReportPdf(rows, s.anomalies.filter((a) => a.status === "ouverte").length);
+    onToast("Rapport PDF des anomalies généré — prêt à signature.");
+  };
+
   const eqRow = (e: (typeof s.equipment)[number]) => [
     e.code, e.serial, e.brand, e.model, e.type, e.power, STATUS_META[e.status].label,
     siteLabel(s, s.locations.find((l) => l.id === e.locationId)?.siteId ?? ""), locLabel(s, e.locationId),
@@ -178,6 +200,28 @@ export function ReportsView({ onToast }: { onToast: (m: string) => void }) {
       </div>
 
       <Reveal>
+        <div className="card-hover flex flex-wrap items-center gap-4 rounded-xl border border-[#e8b7b0] bg-card px-5 py-4">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-danger text-white">
+            <Icon name="alert" className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5">
+              <h3 className="font-display text-[15.5px] font-bold text-ink">Rapport PDF des anomalies — signable</h3>
+              <span className="rounded-full bg-[#fadfda] px-2 py-0.5 font-mono text-[10.5px] font-semibold text-[#9e3327]">
+                {s.anomalies.filter((a) => a.status === "ouverte").length} ouverte(s)
+              </span>
+            </div>
+            <p className="mt-0.5 text-[12.5px] text-mute">
+              Compile déplacés, absents et écarts de localisation avec blocs de visa — à imprimer et faire signer par le responsable.
+            </p>
+          </div>
+          <button onClick={exportAnomaliesPdf} className={btnPrimary}>
+            <Icon name="report" className="h-4 w-4" /> Générer le PDF
+          </button>
+        </div>
+      </Reveal>
+
+      <Reveal delay={40}>
         <div className="grid gap-3">
           {reports.map((r) => (
             <div key={r.id} className="card-hover flex flex-wrap items-center gap-4 rounded-xl border border-line bg-card px-5 py-4">

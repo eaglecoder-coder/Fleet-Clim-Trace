@@ -3,7 +3,7 @@ import type { AppState, AuditEntry, Role, Transfer, Equipment } from "./types";
 import { STATUS_META } from "./types";
 import { buildSeed } from "./data/seed";
 
-const LS_KEY = "climatrice:v3";
+const LS_KEY = "climatrice:v4";
 
 /* ---------------- Formatage ---------------- */
 
@@ -32,11 +32,15 @@ export type Action =
   | { type: "ADD_EQUIPMENT"; data: Omit<Equipment, "id" | "code" | "createdAt" | "updatedAt"> }
   | { type: "SET_STATUS"; id: string; status: Equipment["status"] }
   | { type: "ADD_LOCATION"; siteId: string; building: string; floor: string; room: string }
-  | { type: "CREATE_TRANSFER"; equipmentId: string; toLocationId: string; reason: string }
+  | { type: "ADD_PHOTO"; equipmentId: string; dataUrl: string }
+  | { type: "REMOVE_PHOTO"; equipmentId: string; index: number }
+  | { type: "BATCH_STOCK"; brand: string; model: string; kind: string; power: string; supplier: string; invoice: string; yearAcq: number; locationId: string; responsible: string; count: number; serialPrefix: string }
+  | { type: "IMPORT_CSV"; items: { serial: string; brand: string; model: string; type: string; power: string; supplier: string; invoice: string }[]; fileName: string; locationId: string; responsible: string }
+  | { type: "CREATE_TRANSFER"; equipmentId: string; toLocationId: string; reason: string; photoDemande?: string }
   | { type: "APPROVE_TRANSFER"; id: string }
   | { type: "REJECT_TRANSFER"; id: string; reason: string }
   | { type: "SHIP_TRANSFER"; id: string; transporter: string }
-  | { type: "RECEIVE_TRANSFER"; id: string; receiver: string }
+  | { type: "RECEIVE_TRANSFER"; id: string; receiver: string; photoReception?: string }
   | { type: "ADD_INTERVENTION"; equipmentId: string; kind: "preventive" | "corrective" | "installation" | "reparation"; issue: string; action: string; parts: string; cost: number; result: string; nextDate?: string }
   | { type: "START_SESSION"; siteId: string }
   | { type: "CLOSE_SESSION"; id: string }
@@ -94,6 +98,97 @@ function reducer(state: AppState, a: Action): AppState {
       return withToast(s, `${code} enregistré — identité unique attribuée.`);
     }
 
+    case "ADD_PHOTO": {
+      const e = state.equipment.find((x) => x.id === a.equipmentId);
+      if (!e) return state;
+      const photos = e.photos ?? [];
+      if (photos.length >= 6) return withToast(state, "Galerie limitée à 6 photos par équipement.");
+      let s: AppState = {
+        ...state,
+        equipment: state.equipment.map((x) => (x.id === a.equipmentId ? { ...x, photos: [...photos, a.dataUrl], updatedAt: new Date().toISOString() } : x)),
+      };
+      s = pushAudit(s, "PHOTO", "Équipement", e.code, `Photo n°${photos.length + 1} ajoutée à la galerie d'identification.`);
+      return withToast(s, `Photo ajoutée à ${e.code}.`);
+    }
+
+    case "REMOVE_PHOTO": {
+      const e = state.equipment.find((x) => x.id === a.equipmentId);
+      if (!e) return state;
+      let s: AppState = {
+        ...state,
+        equipment: state.equipment.map((x) => (x.id === a.equipmentId ? { ...x, photos: (x.photos ?? []).filter((_, i) => i !== a.index), updatedAt: new Date().toISOString() } : x)),
+      };
+      s = pushAudit(s, "PHOTO", "Équipement", e.code, `Photo n°${a.index + 1} retirée de la galerie.`);
+      return withToast(s, "Photo retirée.");
+    }
+
+    case "BATCH_STOCK": {
+      const n0 = state.seq.eq;
+      const u = state.users.find((x) => x.id === state.currentUserId);
+      const now = new Date().toISOString();
+      const prefix = (a.serialPrefix.trim() || `${a.brand.slice(0, 3).toUpperCase()}${a.power.replace(/[^0-9]/g, "")}`).toUpperCase();
+      const y = new Date(); y.setFullYear(y.getFullYear() + 1);
+      const created: Equipment[] = [];
+      for (let i = 0; i < a.count; i++) {
+        const n = n0 + 1 + i;
+        created.push({
+          id: `e${n}`, code: `CLM-${String(n).padStart(6, "0")}`,
+          serial: `${prefix}-${String(n).padStart(6, "0")}`,
+          brand: a.brand, model: a.model, type: a.kind, power: a.power,
+          tech: "Inverter", refrigerant: "R410A", capacity: "12 000 BTU", consumption: "1,1 kW/h",
+          yearFab: a.yearAcq - 1, yearAcq: a.yearAcq, supplier: a.supplier || "—", invoice: a.invoice || "—",
+          warrantyEnd: y.toISOString(), status: "stock", locationId: a.locationId, responsible: a.responsible || "—",
+          createdAt: now, updatedAt: now,
+        });
+      }
+      const impN = state.seq.imp + 1;
+      const impCode = `IMP-2026-${String(impN).padStart(3, "0")}`;
+      let s: AppState = {
+        ...state,
+        seq: { ...state.seq, eq: n0 + a.count, imp: impN },
+        equipment: [...created, ...state.equipment],
+        imports: [{ id: `im${Date.now().toString(36)}`, code: impCode, source: "lot", operator: u?.name ?? "—", date: now, count: a.count, codes: created.map((c) => c.code) }, ...state.imports],
+      };
+      s = pushAudit(s, "IMPORT_LOT", "Stock", impCode,
+        `${a.count} × ${a.brand} ${a.model} ${a.power} entrés en stock (${created[0].code} → ${created[created.length - 1].code}) · série auto ${prefix}-…`);
+      return withToast(s, `${a.count} unités créées en stock — ${created[0].code} → ${created[created.length - 1].code}.`);
+    }
+
+    case "IMPORT_CSV": {
+      const n0 = state.seq.eq;
+      const u = state.users.find((x) => x.id === state.currentUserId);
+      const now = new Date().toISOString();
+      const y = new Date(); y.setFullYear(y.getFullYear() + 1);
+      const existing = new Set(state.equipment.map((e) => e.serial.toUpperCase()));
+      const accepted = a.items.filter((it) => it.serial.trim() && !existing.has(it.serial.trim().toUpperCase()));
+      if (accepted.length === 0) return withToast(state, "Aucune ligne valide — import annulé.");
+      const created: Equipment[] = accepted.map((it, i) => {
+        const n = n0 + 1 + i;
+        existing.add(it.serial.trim().toUpperCase());
+        return {
+          id: `e${n}`, code: `CLM-${String(n).padStart(6, "0")}`,
+          serial: it.serial.trim().toUpperCase(), brand: it.brand, model: it.model,
+          type: it.type || "Split mural", power: it.power || "1,5 CV",
+          tech: "Inverter", refrigerant: "R410A", capacity: "12 000 BTU", consumption: "1,1 kW/h",
+          yearFab: (Number(new Date().getFullYear()) - 1), yearAcq: Number(new Date().getFullYear()),
+          supplier: it.supplier || "—", invoice: it.invoice || "—",
+          warrantyEnd: y.toISOString(), status: "stock", locationId: a.locationId, responsible: "Gestionnaire de parc",
+          createdAt: now, updatedAt: now,
+        };
+      });
+      const impN = state.seq.imp + 1;
+      const impCode = `IMP-2026-${String(impN).padStart(3, "0")}`;
+      let s: AppState = {
+        ...state,
+        seq: { ...state.seq, eq: n0 + created.length, imp: impN },
+        equipment: [...created, ...state.equipment],
+        imports: [{ id: `im${Date.now().toString(36)}`, code: impCode, source: "csv", fileName: a.fileName, operator: u?.name ?? "—", date: now, count: created.length, codes: created.map((c) => c.code) }, ...state.imports],
+      };
+      s = pushAudit(s, "IMPORT_CSV", "Stock", impCode,
+        `Fichier « ${a.fileName} » — ${created.length} unité(s) créée(s) en stock (${created[0].code} → ${created[created.length - 1].code}), ${a.items.length - created.length} ligne(s) écartée(s).`);
+      return withToast(s, `Import validé — ${created.length} équipement(s) ajouté(s) au registre.`);
+    }
+
     case "SET_STATUS": {
       const e = state.equipment.find((x) => x.id === a.id);
       if (!e || e.status === a.status) return state;
@@ -130,6 +225,7 @@ function reducer(state: AppState, a: Action): AppState {
         fromLocationId: e.locationId, toLocationId: a.toLocationId,
         requester: u?.name ?? "—", status: "demande", reason: a.reason,
         requestedAt: new Date().toISOString(),
+        photoDemande: a.photoDemande,
       };
       let s: AppState = { ...state, seq: { ...state.seq, trf: n }, transfers: [tr, ...state.transfers] };
       s = pushAudit(s, "DEMANDE_TRANSFERT", "Transfert", code,
@@ -192,7 +288,7 @@ function reducer(state: AppState, a: Action): AppState {
       let s: AppState = {
         ...state,
         transfers: state.transfers.map((x) =>
-          x.id === a.id ? { ...x, status: "cloture", receiver: a.receiver, receivedAt: new Date().toISOString() } : x
+          x.id === a.id ? { ...x, status: "cloture", receiver: a.receiver, receivedAt: new Date().toISOString(), photoReception: a.photoReception ?? x.photoReception } : x
         ),
         /* Règle n°5 : c'est la réception qui met à jour l'emplacement officiel */
         equipment: state.equipment.map((x) =>
@@ -390,7 +486,7 @@ function loadInitial(): AppState {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as AppState;
-      if (parsed.version === 3) return { ...parsed, toast: null };
+      if (parsed.version === 4 && Array.isArray(parsed.imports)) return { ...parsed, toast: null };
     }
   } catch {
     /* seed */
@@ -411,15 +507,17 @@ function currentUser(s: AppState) {
 
 const StoreCtx = createContext<Ctx | null>(null);
 
-export function StoreProvider({ children }: { children: ReactNode }) {
+export function StoreProvider({ children, onPersistError }: { children: ReactNode; onPersistError?: () => void }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitial);
 
   useEffect(() => {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify({ ...state, toast: null }));
     } catch {
-      /* stockage plein — ignorer */
+      /* stockage local saturé — remonter à l'UI */
+      onPersistError?.();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
   useEffect(() => {

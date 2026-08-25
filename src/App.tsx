@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StoreProvider, useStore, computeAlerts, daysUntil } from "./store";
 import { ROLE_META } from "./types";
 import { Icon } from "./components/icons";
 import { Overline } from "./components/ui";
+import ScanModal from "./components/ScanModal";
 import Login from "./views/Login";
 import Dashboard from "./views/Dashboard";
 import Equipments from "./views/Equipments";
@@ -15,9 +16,24 @@ import { AuditView, ReportsView } from "./views/Journal";
 type ViewId = "dashboard" | "equipments" | "transferts" | "sites" | "maintenance" | "inventaire" | "anomalies" | "rapports" | "audit";
 
 export default function App() {
+  const [persistWarn, setPersistWarn] = useState(0);
+  useEffect(() => {
+    if (!persistWarn) return;
+    const t = setTimeout(() => setPersistWarn(0), 6500);
+    return () => clearTimeout(t);
+  }, [persistWarn]);
   return (
-    <StoreProvider>
+    <StoreProvider onPersistError={() => setPersistWarn((n) => n + 1)}>
       <Shell />
+      {persistWarn > 0 && (
+        <div className="anim-pop fixed bottom-5 left-1/2 z-[95] flex max-w-md -translate-x-1/2 items-start gap-3 rounded-xl border border-[#f3d3b8] bg-[#a34a08] px-4 py-3.5 text-white shadow-2xl">
+          <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="text-[12.5px] leading-snug">
+            <b>Stockage local saturé</b> — les derniers ajouts (photos) ne sont pas sauvegardés durablement.
+            Retirez d'anciennes photos de galeries pour libérer de l'espace.
+          </div>
+        </div>
+      )}
     </StoreProvider>
   );
 }
@@ -29,6 +45,7 @@ function Shell() {
   const [sideOpen, setSideOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [scanOpen, setScanOpen] = useState(false);
 
   const alerts = useMemo(() => computeAlerts(state), [state]);
   const pendingTr = state.transfers.filter((t) => t.status === "demande").length;
@@ -152,6 +169,15 @@ function Shell() {
                 <span className="anim-breathe h-1.5 w-1.5 rounded-full bg-leaf" /> chaîne intègre
               </span>
 
+              <button
+                onClick={() => setScanOpen(true)}
+                className="btn-press flex items-center gap-2 rounded-lg bg-ink px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-frost hover:bg-pine"
+                title="Scanner une étiquette QR avec la caméra"
+              >
+                <Icon name="scan" className="h-4.5 w-4.5" />
+                <span className="hidden sm:inline">Scanner</span>
+              </button>
+
               <div className="relative">
                 <button onClick={() => setBellOpen(!bellOpen)} className="btn-press relative rounded-lg border border-linedark bg-card p-2 text-body hover:border-teal" aria-label="Notifications">
                   <Icon name="bell" className="h-4.5 w-4.5" />
@@ -213,6 +239,15 @@ function Shell() {
           </footer>
         </main>
       </div>
+
+      {/* scan QR global */}
+      <ScanModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        onDetected={(code) => { setScanOpen(false); onNav("equipments", code); }}
+        over="Accès direct fiche"
+        title="Scanner une étiquette ClimaTrace"
+      />
 
       {/* toast */}
       {state.toast && (

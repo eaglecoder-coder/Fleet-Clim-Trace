@@ -74,6 +74,7 @@ export interface Equipment {
   lastInventory?: string;
   lastInventoryResult?: InvResult;
   comment?: string;
+  photos?: string[];         // galerie compressée (data-URLs) — identification visuelle terrain
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +96,19 @@ export interface Transfer {
   approvedAt?: string;
   shippedAt?: string;
   receivedAt?: string;
+  photoDemande?: string;     // preuve photo à la demande (état au départ)
+  photoReception?: string;   // preuve photo à la réception (état à l'arrivée)
+}
+
+export interface ImportRecord {
+  id: string;
+  code: string;              // IMP-2026-xxx
+  source: "csv" | "lot";
+  fileName?: string;
+  operator: string;
+  date: string;
+  count: number;
+  codes: string[];           // codes CLM générés — permet de retrouver la source d'un équipement
 }
 
 export type InterventionType = "preventive" | "corrective" | "installation" | "reparation";
@@ -174,8 +188,9 @@ export interface AppState {
   sessions: InventorySession[];
   checks: InventoryCheck[];
   anomalies: Anomaly[];
+  imports: ImportRecord[];
   audit: AuditEntry[];
-  seq: { eq: number; trf: number; int: number; anm: number; inv: number; aud: number; chk: number };
+  seq: { eq: number; trf: number; int: number; anm: number; inv: number; aud: number; chk: number; imp: number };
   toast: string | null;
 }
 
